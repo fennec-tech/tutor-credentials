@@ -2,6 +2,10 @@ FROM docker.io/ubuntu:20.04 as minimal
 LABEL maintainer="Lawrence McDaniel <lpm0073@gmail.com>"
 
 ENV DEBIAN_FRONTEND=noninteractive
+{% if APT_PROXY -%}
+RUN echo 'Acquire::{{ APT_PROXY | url_part('scheme') }}::Proxy "{{ APT_PROXY }}";' \
+    > /etc/apt/apt.conf.d/00proxy 
+{%- endif %}
 RUN apt update && \
     apt install -y build-essential curl git language-pack-en
 
@@ -18,6 +22,11 @@ RUN apt update && \
     apt install -y libssl-dev zlib1g-dev libbz2-dev \
     libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev \
     xz-utils tk-dev libffi-dev liblzma-dev python-openssl git
+
+{% if APT_PROXY -%}
+RUN rm /etc/apt/apt.conf.d/00proxy
+{%- endif %}
+
 ARG PYTHON_VERSION=3.8.12
 ENV PYENV_ROOT /opt/pyenv
 RUN git clone https://github.com/pyenv/pyenv $PYENV_ROOT --branch v2.2.2 --depth 1
@@ -68,6 +77,8 @@ RUN apt update && apt install -y software-properties-common libmysqlclient-dev l
 COPY --from=code /openedx/credentials /openedx/credentials
 WORKDIR /openedx/credentials
 
+ENV PIP_INDEX_URL={{ PIP_INDEX_URL }} \
+    PIP_TRUSTED_HOST={{ PIP_INDEX_URL | url_part('netloc') }}
 # Install the right version of pip/setuptools
 RUN pip install setuptools==44.1.0 pip==20.0.2 wheel==0.34.2
 
@@ -141,6 +152,8 @@ RUN pip install -r requirements/production.in
 RUN echo "{}" > /openedx/config.yml
 ENV CREDENTIALS_CFG /openedx/config.yml
 
+ENV PIP_INDEX_URL= \
+    PIP_TRUSTED_HOST=
 # mcdaniel: this breaks. no idea if we really need it.
 # -----------------------------------------------------------------------------
 # Copy user-specific locales to /openedx/locale/user/locale and compile them
